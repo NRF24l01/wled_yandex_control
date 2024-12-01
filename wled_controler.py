@@ -13,14 +13,14 @@ class Wled_Controler:
     def set_brightnes(self, brightnes: int):
         return self._set_param({"bri": round(brightnes / 255 * 100)})
 
-    def _set_power(self, power: bool):
+    def set_power(self, power: bool):
         return self._set_param({"on": power})
 
     def enable(self):
-        return self._set_power(True)
+        return self.set_power(True)
 
     def disable(self):
-        return self._set_power(False)
+        return self.set_power(False)
 
     def set_color(self, rgb: tuple):
         self.fx_solid()
