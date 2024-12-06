@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 
 from wled_controler import Wled_Controler
 
@@ -26,3 +26,13 @@ async def bri_status():
 async def bri_set(value):
     wled.set_brightnes(int(value))
     return {"value": "Ok"}
+
+@app.get("/color")
+async def set_color(r, g, b, value):
+    wled.set_color((r, g, b))
+    return {"value": "ok"}
+
+@app.get("/color/status")
+async def color_status():
+    return {"value": wled.return_32bit_color()}
+

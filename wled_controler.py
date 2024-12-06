@@ -47,6 +47,39 @@ def kelvin_to_rgb(kelvin):
 class Wled_Controler:
     def __init__(self, host: str):
         self.host = "http://" + host
+        return
+    
+    @staticmethod
+    def color_temp_to_rgb(temp_k):
+        """
+        Convert a color temperature in Kelvin (2700K to 6500K) to an RGB tuple (0-255).
+
+        Parameters:
+        temp_k (float): The color temperature in Kelvin. Should be in the range 2700K-6500K.
+
+        Returns:
+        tuple: An (R, G, B) tuple with values in the range 0-255.
+        """
+        if temp_k < 2700:
+            temp_k = 2700
+        elif temp_k > 6500:
+            temp_k = 6500
+
+        # Scale the temperature to a 0-1 range
+        normalized_temp = (temp_k - 2700) / (6500 - 2700)
+
+        # Interpolate between yellowish (2700K) and bluish (6500K) colors
+        # Approximate RGB values for 2700K and 6500K
+        rgb_2700 = (255, 180, 107)  # Warm yellowish color
+        rgb_6500 = (170, 190, 255)  # Cool bluish color
+
+        # Interpolating each RGB component
+        r = int(rgb_2700[0] + normalized_temp * (rgb_6500[0] - rgb_2700[0]))
+        g = int(rgb_2700[1] + normalized_temp * (rgb_6500[1] - rgb_2700[1]))
+        b = int(rgb_2700[2] + normalized_temp * (rgb_6500[2] - rgb_2700[2]))
+
+        return r, g, b
+
 
     def _set_param(self, body: dict):
         req = post(self.host + "/json/state", json=body)
@@ -91,10 +124,18 @@ class Wled_Controler:
     
     def fx_solid(self):
         return self._set_param({"seg": [{"fx": "-~"}]})
+    
+    @staticmethod
+    def rgb_to_32bit(r, g, b):
+        return (r << 16) | (g << 8) | b
+    
+    def return_32bit_color(self):
+        r, g, b = self._get_params()["seg"][0]["col"][0]
+        return Wled_Controler.rgb_to_32bit(r, g, b)
 
 
 if __name__ == "__main__":
     wled = Wled_Controler("wled.local")
-    rq = wled.set_color(tuple(kelvin_to_rgb(2000)))
+    rq = Wled_Controler.color_temp_to_rgb(2700)
     print(rq)
     
