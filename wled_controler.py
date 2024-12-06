@@ -2,46 +2,37 @@ from requests import get, post
 from time import sleep
 import math
 
-def kelvin_to_rgb(kelvin):
-    """
-    Convert a color temperature in Kelvins to an RGB color value (0-255).
+def color_temp_to_rgb(kelvin):
+    # Clamp the color temperature to the range [1000, 40000] to avoid extreme results
+    kelvin = max(1000, min(kelvin, 40000))
 
-    Args:
-        kelvin (float): Color temperature in Kelvins.
-
-    Returns:
-        tuple: (R, G, B) as integers in the range 0-255.
-    """
-    temperature = kelvin / 100
-
-    # Calculate red
-    if temperature <= 66:
+    # Calculate the red channel
+    if kelvin <= 6600:
         red = 255
     else:
-        red = temperature - 60
-        red = 329.698727446 * (red ** -0.1332047592)
-        red = max(0, min(255, red))
+        red = 329.698727446 * ((kelvin / 100) - 60) ** -0.1332047592
+        red = min(max(red, 0), 255)
 
-    # Calculate green
-    if temperature <= 66:
-        green = temperature
-        green = 99.4708025861 * (math.log(green)) - 161.1195681661
+    # Calculate the green channel
+    if kelvin <= 6600:
+        green = 99.4708025861 * ((kelvin / 100) - 10) ** 0.0755147798
+        green = min(max(green, 0), 255)
     else:
-        green = temperature - 60
-        green = 288.1221695283 * (green ** -0.0755148492)
-    green = max(0, min(255, green))
+        green = 288.1221695283 * ((kelvin / 100) - 60) ** -0.0755147798
+        green = min(max(green, 0), 255)
 
-    # Calculate blue
-    if temperature >= 66:
+    # Calculate the blue channel
+    if kelvin >= 6600:
         blue = 255
-    elif temperature <= 19:
-        blue = 0
     else:
-        blue = temperature - 10
-        blue = 138.5177312231 * (math.log(blue)) - 305.0447927307
-        blue = max(0, min(255, blue))
+        if kelvin <= 1900:
+            blue = 0
+        else:
+            blue = 138.5177312231 * math.log(kelvin / 100 - 10) - 305.0447927307
+        blue = min(max(blue, 0), 255)
 
     return int(red), int(green), int(blue)
+
 
 
 class Wled_Controler:
@@ -50,35 +41,50 @@ class Wled_Controler:
         return
     
     @staticmethod
-    def color_temp_to_rgb(temp_k):
-        """
-        Convert a color temperature in Kelvin (2700K to 6500K) to an RGB tuple (0-255).
+    def color_temp_to_rgb(kelvin):
+        kelvin = max(1000, min(kelvin, 40000))
 
-        Parameters:
-        temp_k (float): The color temperature in Kelvin. Should be in the range 2700K-6500K.
+        if kelvin <= 6600:
+            red = 255
+        else:
+            red = 329.698727446 * ((kelvin / 100) - 60) ** -0.1332047592
+            red = min(max(red, 0), 255)
 
-        Returns:
-        tuple: An (R, G, B) tuple with values in the range 0-255.
-        """
-        if temp_k < 2700:
-            temp_k = 2700
-        elif temp_k > 6500:
-            temp_k = 6500
+        if kelvin <= 6600:
+            green = 99.4708025861 * ((kelvin / 100) - 10) ** 0.0755147798
+            green = min(max(green, 0), 255)
+        else:
+            green = 288.1221695283 * ((kelvin / 100) - 60) ** -0.0755147798
+            green = min(max(green, 0), 255)
 
-        # Scale the temperature to a 0-1 range
-        normalized_temp = (temp_k - 2700) / (6500 - 2700)
+        if kelvin >= 6600:
+            blue = 255
+        else:
+            if kelvin <= 1900:
+                blue = 0
+            else:
+                blue = 138.5177312231 * math.log(kelvin / 100 - 10) - 305.0447927307
+            blue = min(max(blue, 0), 255)
 
-        # Interpolate between yellowish (2700K) and bluish (6500K) colors
-        # Approximate RGB values for 2700K and 6500K
+        return round(red), round(green), round(blue)
+    
+    @staticmethod
+    def rgb_to_color_temp(r, g, b):
         rgb_2700 = (255, 180, 107)  # Warm yellowish color
         rgb_6500 = (170, 190, 255)  # Cool bluish color
 
-        # Interpolating each RGB component
-        r = int(rgb_2700[0] + normalized_temp * (rgb_6500[0] - rgb_2700[0]))
-        g = int(rgb_2700[1] + normalized_temp * (rgb_6500[1] - rgb_2700[1]))
-        b = int(rgb_2700[2] + normalized_temp * (rgb_6500[2] - rgb_2700[2]))
+        def normalize(value, min_val, max_val):
+            return (value - min_val) / (max_val - min_val)
 
-        return r, g, b
+        dist_r = normalize(r, rgb_2700[0], rgb_6500[0])
+        dist_g = normalize(g, rgb_2700[1], rgb_6500[1])
+        dist_b = normalize(b, rgb_2700[2], rgb_6500[2])
+
+        normalized_temp = (dist_r + dist_g + dist_b) / 3
+
+        temp_k = 2700 + normalized_temp * (6500 - 2700)
+
+        return max(2700, min(6500, temp_k))
 
 
     def _set_param(self, body: dict):
@@ -132,10 +138,14 @@ class Wled_Controler:
     def return_32bit_color(self):
         r, g, b = self._get_params()["seg"][0]["col"][0]
         return Wled_Controler.rgb_to_32bit(r, g, b)
+    
+    def get_color_temp(self):
+        r, g, b= self._get_params()["seg"][0]["col"][0]
+        return Wled_Controler.rgb_to_color_temp(r, g, b)
 
 
 if __name__ == "__main__":
     wled = Wled_Controler("wled.local")
-    rq = Wled_Controler.color_temp_to_rgb(2700)
-    print(rq)
+    r, g, b = color_temp_to_rgb(6500)
+    print(r, g, b)
     
